@@ -1,3 +1,6 @@
+---
+output: html_document
+---
 #**Practical Machine Learning Project**
 
 ##**Background**
@@ -147,11 +150,7 @@ classoftestdataset
 ###**Prediction Errors**
 
 ###**Calculate in sample error**
-```{r}
-print(modelfitrf, 3)
-```
-
-In sample error = (1 - accuracy) x 100. For random forest model, the accuracy is 99.86%, therefore its in sample error is (1 - 0.9986) x 100 = 0.14%.
+In sample error = (1 - accuracy) x 100. For random forest model, the accuracy is 99.90%, therefore its in sample error is (1 - 0.9990) x 100 = 0.10%.
 
 ###**Estimate out of sample error**
 ```{r}
@@ -167,7 +166,7 @@ outofsampleerror <- 1 - outofsampleaccuracy
 round(outofsampleerror * 100, 2)
 ```
 
-The estimated out of sample error of random forest model is 0.14%. Normally, the out of sample error is greater than the in sample error. However, the random forest model built in this project shows comparable out of sample error and in sample error, indicating there is no overfitting. 
+The estimated out of sample error of random forest model is 0.14%. The random forest model built in this project shows a slightly worse out of sample error than the in sample error, indicating there is no overfitting. 
 
 ##**References**
 
