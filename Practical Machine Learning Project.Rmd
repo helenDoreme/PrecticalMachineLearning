@@ -1,0 +1,174 @@
+#**Practical Machine Learning Project**
+
+##**Background**
+
+Using devices such as Jawbone Up, Nike FuelBand and Fitbit now provides large amount of data about personal activity. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. This project analyzes data from accelerometers on the belt, forearm, arm and dumbell of 6 participants, who performed barbell lifts correctly and incorrectly in 5 different ways. The goal of this project is to predict the manner in which they did the exercise, which is the "classe" variable in the training set. Predication can be made with any of other variables. Once the prediction model is built, it will be used to predict 20 different test cases. More information is available at http://groupware.les.inf.puc-rio.br/har. The training data are available at https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv and the test data are available at https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv.
+
+##**Data Loading and Partitioning** 
+```{r, results="hide"}
+library(caret)
+require(rpart)
+library(rattle)
+require(randomForest)
+
+# Read training data and the data of test cases
+trainraw <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+
+# Set seed for reproducibility
+set.seed(57)
+
+# Shuffle the training data to randomize the order of observations
+trainrawsf <- trainraw[sample(nrow(trainraw)),]
+
+# Create training and testing sets
+intrain <- createDataPartition(y=trainrawsf$classe, p = 0.7, list = FALSE)
+training <- trainrawsf[intrain, ]
+validtest <- trainrawsf[-intrain, ]
+```
+```{r}
+# Show the number of observations for each dataset
+dim(trainraw)
+dim(training)
+dim(validtest)
+```
+
+The original training set has 160 features and 19622 observations. The newly created training and testing sets has 13737 and 5885 observations respectively.
+
+##**Data Preprocessing**
+
+###**Remove useless features**
+```{r}
+# Discard useless features ("X", user_name" and "cvtd_timestamp")  
+trainrm <- training[ , -c(1, 2, 5)] 
+
+# Discard features that are almost entirly NA
+trainnona<-trainrm[, (colSums(is.na(trainrm)) < nrow(trainrm)/2)]
+
+# Dimension of current training set 
+dim(trainnona)
+```
+
+After removing the useless features and the mostly NA features, the processed training set now has 90 features. 
+
+###**Extract useful features**
+```{r}
+# Discard zero- and near zero-variance features
+trainnzv <- nearZeroVar(trainnona)
+length(trainnzv)
+trainnzvfilt <- trainnona[, -trainnzv]  
+dim(trainnzvfilt)
+
+# Convert "classe" into numeric because cor() can only take numeric dada.frame
+trainnzvfilt$classe <- factor(trainnzvfilt$classe, labels = c(1:5))
+trainnzvfilt$classe <- as.numeric(trainnzvfilt$classe)
+
+# Identify and remove correlated features
+traincor <- cor(trainnzvfilt, use ="complete.obs")
+trainhicor <- findCorrelation(traincor, cutoff = .75)
+trainfiltered <- trainnzvfilt[,-trainhicor]
+dim(trainfiltered)
+
+# Change "classe" from numeric variable back to factor variable
+trainfiltered$classe <- factor(trainfiltered$classe, labels = c("A", "B", "C", "D", "E"))
+```
+
+After removing zero- and near zero-variance features, the training set has 56 features. After discarding the closely correlated features, the new training set now has 37 features remained. 
+
+##**Fit Models**
+
+###**Set cross validation method**
+```{r}
+fitcontrol<-trainControl(method = "cv", number = 5)
+```
+
+K-fold is used as cross validation method with K = 5.
+
+###**Model 1 - classification tree**
+```{r, cache=TRUE}
+# Fit the training set with classification tree model
+modelfitct <- train(classe ~ ., data = trainfiltered, trControl = fitcontrol, method="rpart")
+```
+```{r}
+# Show the detailed information of classification tree model
+print(modelfitct, digits=3)
+print(modelfitct$finalModel, digits=3)
+
+# Demonstrate the algorithm of classification tree model
+fancyRpartPlot(modelfitct$finalModel)
+```
+
+###**Model 2 - random forest**
+```{r, cache=TRUE}
+# Fit the training set with random forest model
+modelfitrf<-train(classe ~ ., data = trainfiltered, trControl = fitcontrol, method="rf", importance = T)
+```
+```{r}
+# Show the detailed information of random forest model
+print(modelfitrf, digits=3)
+print(modelfitrf$finalModel, digits=3)
+
+# Calculate variable importance of random forest model
+virf <- varImp(modelfitrf)
+virf
+
+# Demonstrate variable importance of random forest model
+plot(virf,10)
+```
+
+##**Evaluate Models**
+
+###**Predict with validtest dataset**
+```{r, results="hide"}
+# Predict with validtest dataset using classification tree model
+predictct<-predict(modelfitct, validtest)
+
+# Predict with validtest dataset using random forest model
+predictrf<-predict(modelfitrf, validtest)
+```
+
+###**Calculate accuracy of predication**
+```{r}
+# Calculate predication accuracy of classification tree model
+confusionMatrix(predictct, validtest$classe)
+
+# Calculate predication accuracy of random forest model
+confusionMatrix(predictrf, validtest$classe)
+```
+
+The prediction accuracy of classification tree model is 50.52% and the prediction accuracy of random forest method is 99.86%. Due to the high accuracy, random forest model is selected for predicting the test cases. 
+
+##**Prediction Results**
+```{r}
+classoftestdataset<-predict(modelfitrf, testing)
+classoftestdataset
+```
+
+###**Prediction Errors**
+
+###**Calculate in sample error**
+```{r}
+print(modelfitrf, 3)
+```
+
+In sample error = (1 - accuracy) x 100. For random forest model, the accuracy is 99.86%, therefore its in sample error is (1 - 0.9986) x 100 = 0.14%.
+
+###**Estimate out of sample error**
+```{r}
+# Length of the predictions in validtest set using random forest method
+length(predictrf)
+
+# Calculate the true prediction accuracy
+outofsampleaccuracy <- sum(predictrf == validtest$classe)/length(predictrf)
+outofsampleaccuracy
+
+# out of sample error 
+outofsampleerror <- 1 - outofsampleaccuracy
+round(outofsampleerror * 100, 2)
+```
+
+The estimated out of sample error of random forest model is 0.14%. Normally, the out of sample error is greater than the in sample error. However, the random forest model built in this project shows comparable out of sample error and in sample error, indicating there is no overfitting. 
+
+##**References**
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
